@@ -20,7 +20,11 @@ if (isset($_['expiration'])) {
 
 if (isset($_['personal_note'])) {
 	// TRANSLATORS personal note in share notification email
-	p($l->t("Personal note from the sender: %s.", [$_['personal_note']]));
+	p($l->t("Personal note from the sender:"));
+	print_unescaped('<br>');
+	// Personal Note has already been sanitized by strip_tags();
+	// Convert Linebreaks to html
+	print_unescaped($_['personal_note']);
 	print_unescaped('<br><br>');
 }
 // TRANSLATORS term at the end of a mail
