@@ -26,10 +26,7 @@
 
 namespace OCA\FederatedFileSharing\Tests\Controller;
 
-use OC\Files\Filesystem;
-use OC\HTTPHelper;
 use OCA\FederatedFileSharing\AddressHandler;
-use OCA\FederatedFileSharing\DiscoveryManager;
 use OCA\FederatedFileSharing\FederatedShareProvider;
 use OCA\FederatedFileSharing\FedShareManager;
 use OCA\FederatedFileSharing\Notifications;
@@ -96,17 +93,6 @@ class RequestHandlerTest extends TestCase {
 	 */
 	private $requestHandlerController;
 
-	/**
-	 * @var RequestHandlerController
-	 */
-	private $s2s;
-
-	/** @var  IShare | \PHPUnit_Framework_MockObject_MockObject */
-	private $share;
-
-	/** @var HTTPHelper */
-	private $oldHttpHelper;
-
 	protected function setUp() {
 		parent::setUp();
 
@@ -139,45 +125,6 @@ class RequestHandlerTest extends TestCase {
 			$this->addressHandler,
 			$this->fedShareManager
 		);
-
-		/* TODO: Kill everything below this line ;) */
-
-		self::loginHelper(self::TEST_FILES_SHARING_API_USER1);
-		\OCP\Share::registerBackend('test', 'Test\Share\Backend');
-
-		$config = $this->getMockBuilder('\OCP\IConfig')
-				->disableOriginalConstructor()->getMock();
-		$clientService = $this->createMock('\OCP\Http\Client\IClientService');
-		$httpHelperMock = $this->getMockBuilder('\OC\HTTPHelper')
-				->setConstructorArgs([$config, $clientService])
-				->getMock();
-		$httpHelperMock->expects($this->any())->method('post')->with($this->anything())->will($this->returnValue(true));
-
-		$this->registerHttpHelper($httpHelperMock);
-		$this->connection = \OC::$server->getDatabaseConnection();
-		$this->s2s = new RequestHandlerController(
-			'federatedfilesharing',
-			\OC::$server->getRequest(),
-			$this->federatedShareProvider,
-			\OC::$server->getDatabaseConnection(),
-			$this->appManager,
-			$this->userManager,
-			$this->notifications,
-			$this->addressHandler,
-			$this->fedShareManager
-		);
-	}
-
-	protected function tearDown() {
-		$query = \OCP\DB::prepare('DELETE FROM `*PREFIX*share_external`');
-		$query->execute();
-
-		$query = \OCP\DB::prepare('DELETE FROM `*PREFIX*share`');
-		$query->execute();
-
-		$this->restoreHttpHelper();
-
-		parent::tearDown();
 	}
 
 	public function testShareIsNotCreatedWhenSharingIsDisabled() {
@@ -458,104 +405,6 @@ class RequestHandlerTest extends TestCase {
 			Http::STATUS_SERVICE_UNAVAILABLE,
 			$response->getStatusCode()
 		);
-	}
-
-	/**
-	 * Register an http helper mock for testing purposes.
-	 * @param $httpHelper http helper mock
-	 */
-	private function registerHttpHelper($httpHelper) {
-		$this->oldHttpHelper = \OC::$server->query('HTTPHelper');
-		\OC::$server->registerService('HTTPHelper', function ($c) use ($httpHelper) {
-			return $httpHelper;
-		});
-	}
-
-	/**
-	 * Restore the original http helper
-	 */
-	private function restoreHttpHelper() {
-		$oldHttpHelper = $this->oldHttpHelper;
-		\OC::$server->registerService('HTTPHelper', function ($c) use ($oldHttpHelper) {
-			return $oldHttpHelper;
-		});
-	}
-
-	/**
-	 * @dataProvider dataTestDeleteUser
-	 */
-	public function testDeleteUser($toDelete, $expected, $remainingUsers) {
-		$this->share = $this->createMock('\OCP\Share\IShare');
-		$this->federatedShareProvider->expects($this->any())
-			->method('isOutgoingServer2serverShareEnabled')->willReturn(true);
-		$this->federatedShareProvider->expects($this->any())
-			->method('isIncomingServer2serverShareEnabled')->willReturn(true);
-		$this->federatedShareProvider->expects($this->any())->method('getShareById')
-			->willReturn($this->share);
-		$this->createDummyS2SShares();
-
-		$discoveryManager = new DiscoveryManager(
-			\OC::$server->getMemCacheFactory(),
-			\OC::$server->getHTTPClientService()
-		);
-		$manager = new \OCA\Files_Sharing\External\Manager(
-			\OC::$server->getDatabaseConnection(),
-			Filesystem::getMountManager(),
-			Filesystem::getLoader(),
-			\OC::$server->getNotificationManager(),
-			\OC::$server->getEventDispatcher(),
-			$toDelete
-		);
-
-		$manager->removeUserShares($toDelete);
-
-		$query = $this->connection->prepare('SELECT `user` FROM `*PREFIX*share_external`');
-		$query->execute();
-		$result = $query->fetchAll();
-
-		foreach ($result as $r) {
-			$remainingShares[$r['user']] = isset($remainingShares[$r['user']]) ? $remainingShares[$r['user']] + 1 : 1;
-		}
-
-		$this->assertCount($remainingUsers, $remainingShares);
-
-		foreach ($expected as $key => $value) {
-			if ($key === $toDelete) {
-				$this->assertArrayNotHasKey($key, $remainingShares);
-			} else {
-				$this->assertSame($value, $remainingShares[$key]);
-			}
-		}
-	}
-
-	public function dataTestDeleteUser() {
-		return [
-			['user1', ['user1' => 0, 'user2' => 3, 'user3' => 3], 2],
-			['user2', ['user1' => 4, 'user2' => 0, 'user3' => 3], 2],
-			['user3', ['user1' => 4, 'user2' => 3, 'user3' => 0], 2],
-			['user4', ['user1' => 4, 'user2' => 3, 'user3' => 3], 3],
-		];
-	}
-
-	private function createDummyS2SShares() {
-		$query = $this->connection->prepare('
-			INSERT INTO `*PREFIX*share_external`
-			(`remote`, `share_token`, `password`, `name`, `owner`, `user`, `mountpoint`, `mountpoint_hash`, `remote_id`, `accepted`)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-			');
-
-		$users = ['user1', 'user2', 'user3'];
-
-		for ($i = 0; $i < 10; $i++) {
-			$user = $users[$i%3];
-			$query->execute(['remote', 'token', 'password', 'name', 'owner', $user, 'mount point', $i, $i, 0]);
-		}
-
-		$query = $this->connection->prepare('SELECT `id` FROM `*PREFIX*share_external`');
-		$query->execute();
-		$dummyEntries = $query->fetchAll();
-
-		$this->assertCount(10, $dummyEntries);
 	}
 
 	protected function getValidShareMock($token) {
