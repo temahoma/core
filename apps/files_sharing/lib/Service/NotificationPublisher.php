@@ -20,6 +20,7 @@
  */
 namespace OCA\Files_Sharing\Service;
 
+use OCP\BackgroundJob\IJobList;
 use OCP\IURLGenerator;
 use OCP\IUserManager;
 use OCP\IGroupManager;
@@ -35,17 +36,20 @@ class NotificationPublisher {
 	private $userManager;
 	/** @var IURLGenerator */
 	private $urlGenerator;
+	private $joblist;
 
 	public function __construct(
 		\OCP\Notification\IManager $notificationManager,
 		IUserManager $userManager,
 		IGroupManager $groupManager,
-		IURLGenerator $urlGenerator
+		IURLGenerator $urlGenerator,
+		IJobList $jobList
 	) {
 		$this->notificationManager = $notificationManager;
 		$this->userManager = $userManager;
 		$this->groupManager = $groupManager;
 		$this->urlGenerator = $urlGenerator;
+		$this->joblist = $jobList;
 	}
 
 	private function getAffectedUsers(IShare $share) {
@@ -81,42 +85,11 @@ class NotificationPublisher {
 			return;
 		}
 
-		$fileLink = $this->urlGenerator->linkToRouteAbsolute('files.viewcontroller.showFile', ['fileId' => $share->getNode()->getId()]);
-		$endpointUrl = $this->urlGenerator->getAbsoluteURL(
-			$this->urlGenerator->linkTo('', 'ocs/v1.php/apps/files_sharing/api/v1/shares/pending/' . $share->getId())
-		);
-
-		foreach ($this->getAffectedUsers($share) as $userId) {
-			$notification = $this->notificationManager->createNotification();
-			$notification->setApp('files_sharing')
-				->setUser($userId)
-				->setDateTime(new \DateTime())
-				->setObject('local_share', $share->getFullId());
-			// the fullId is used here to be able to retrieve the share using the core's share manager
-			// in case we need to retreive the share object from the notification.
-			// it can be used later to discard the notification if the share isn't valid any longer.
-
-			$notification->setIcon(
-				$this->urlGenerator->imagePath('core', 'actions/shared.svg')
-			);
-			$notification->setLink($fileLink);
-
-			$notification->setSubject('local_share', [$share->getShareOwner(), $share->getSharedBy(), $share->getNode()->getName()]);
-			$notification->setMessage('local_share', [$share->getShareOwner(), $share->getSharedBy(), $share->getNode()->getName()]);
-
-			$declineAction = $notification->createAction();
-			$declineAction->setLabel('decline');
-			$declineAction->setLink($endpointUrl, 'DELETE');
-			$notification->addAction($declineAction);
-
-			$acceptAction = $notification->createAction();
-			$acceptAction->setLabel('accept');
-			$acceptAction->setLink($endpointUrl, 'POST');
-			$acceptAction->setPrimary(true);
-			$notification->addAction($acceptAction);
-
-			$this->notificationManager->notify($notification);
-		}
+		$this->joblist->add('OCA\Files_Sharing\BackgroundJob\NotificationSender',
+			[
+				'shareId' => $share->getId(),
+				'webroot' => \OC::$WEBROOT,
+			]);
 	}
 
 	/**
