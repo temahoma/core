@@ -94,8 +94,6 @@ class RequestHandlerTest extends TestCase {
 	 */
 	private $requestHandlerController;
 
-	const TEST_FOLDER_NAME = '/folder_share_api_test';
-
 	/**
 	 * @var RequestHandlerController
 	 */
@@ -249,11 +247,108 @@ class RequestHandlerTest extends TestCase {
 		$this->userManager->expects($this->once())
 			->method('userExists')
 			->willReturn(true);
-		/*$this->fedShareManager->expects($this->once())
-			->method('createShare');*/
+		$this->fedShareManager->expects($this->once())
+			->method('createShare');
 		$response = $this->requestHandlerController->createShare();
 		$this->assertEquals(
 			Http::STATUS_CONTINUE,
+			$response->getStatusCode()
+		);
+	}
+
+	public function testAcceptFailedWhenSharingIsDisabled() {
+		$this->expectFileSharingApp('disabled');
+		$this->fedShareManager->expects($this->never())
+			->method('acceptShare');
+		$response = $this->requestHandlerController->acceptShare(2);
+		$this->assertEquals(
+			Http::STATUS_SERVICE_UNAVAILABLE,
+			$response->getStatusCode()
+		);
+	}
+
+	public function testAcceptSuccess() {
+		$this->expectFileSharingApp('enabled');
+		$this->expectOutgoingSharing('enabled');
+
+		$this->request->expects($this->any())
+			->method('getParam')
+			->willReturn('abc');
+		$share = $this->getValidShareMock('abc');
+		$share->expects($this->any())
+			->method('getShareOwner')
+			->willReturn('Alice');
+		$share->expects($this->any())
+			->method('getSharedBy')
+			->willReturn('Bob');
+
+		$this->federatedShareProvider->expects($this->once())
+			->method('getShareById')
+			->willReturn($share);
+
+		$this->fedShareManager->expects($this->once())
+			->method('acceptShare');
+
+		$this->notifications->expects($this->once())
+			->method('sendAcceptShare');
+
+		$response = $this->requestHandlerController->acceptShare(2);
+		$this->assertEquals(
+			Http::STATUS_CONTINUE,
+			$response->getStatusCode()
+		);
+	}
+
+	public function testDeclineFailedWhenSharingIsDisabled() {
+		$this->expectFileSharingApp('disabled');
+		$this->fedShareManager->expects($this->never())
+			->method('declineShare');
+		$response = $this->requestHandlerController->acceptShare(2);
+		$this->assertEquals(
+			Http::STATUS_SERVICE_UNAVAILABLE,
+			$response->getStatusCode()
+		);
+	}
+
+	public function testDeclineSuccess() {
+		$this->expectFileSharingApp('enabled');
+		$this->expectOutgoingSharing('enabled');
+
+		$this->request->expects($this->any())
+			->method('getParam')
+			->willReturn('abc');
+		$share = $this->getValidShareMock('abc');
+		$share->expects($this->any())
+			->method('getShareOwner')
+			->willReturn('Alice');
+		$share->expects($this->any())
+			->method('getSharedBy')
+			->willReturn('Bob');
+
+		$this->federatedShareProvider->expects($this->once())
+			->method('getShareById')
+			->willReturn($share);
+
+		$this->fedShareManager->expects($this->once())
+			->method('declineShare');
+
+		$this->notifications->expects($this->once())
+			->method('sendDeclineShare');
+
+		$response = $this->requestHandlerController->declineShare(2);
+		$this->assertEquals(
+			Http::STATUS_CONTINUE,
+			$response->getStatusCode()
+		);
+	}
+
+	public function testUnshareFailedWhenSharingIsDisabled() {
+		$this->expectFileSharingApp('disabled');
+		$this->fedShareManager->expects($this->never())
+			->method('unshare');
+		$response = $this->requestHandlerController->unshare(2);
+		$this->assertEquals(
+			Http::STATUS_SERVICE_UNAVAILABLE,
 			$response->getStatusCode()
 		);
 	}
@@ -277,72 +372,6 @@ class RequestHandlerTest extends TestCase {
 		\OC::$server->registerService('HTTPHelper', function ($c) use ($oldHttpHelper) {
 			return $oldHttpHelper;
 		});
-	}
-
-	public function testDeclineShare() {
-		$this->share = $this->createMock('\OCP\Share\IShare');
-		$this->federatedShareProvider->expects($this->any())
-			->method('isOutgoingServer2serverShareEnabled')->willReturn(true);
-		$this->federatedShareProvider->expects($this->any())
-			->method('isIncomingServer2serverShareEnabled')->willReturn(true);
-		$this->federatedShareProvider->expects($this->any())->method('getShareById')
-			->willReturn($this->share);
-		$this->s2s = $this->getMockBuilder(RequestHandlerController::class)
-			->setConstructorArgs(
-				[
-					'federatedfilesharing',
-					\OC::$server->getRequest(),
-					$this->federatedShareProvider,
-					\OC::$server->getDatabaseConnection(),
-					$this->appManager,
-					$this->userManager,
-					$this->notifications,
-					$this->addressHandler,
-					$this->fedShareManager
-				]
-			)->setMethods(['executeDeclineShare', 'verifyShare'])->getMock();
-
-		$this->fedShareManager->expects($this->once())->method('declineShare');
-
-		$this->s2s->expects($this->any())->method('verifyShare')->willReturn(true);
-
-		$_POST['token'] = 'token';
-
-		$this->s2s->declineShare(42);
-	}
-
-	public function XtestDeclineShareMultiple() {
-		$this->share->expects($this->any())->method('verifyShare')->willReturn(true);
-
-		$dummy = \OCP\DB::prepare('
-			INSERT INTO `*PREFIX*share`
-			(`share_type`, `uid_owner`, `item_type`, `item_source`, `item_target`, `file_source`, `file_target`, `permissions`, `stime`, `token`, `share_with`)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-			');
-		$dummy->execute([\OCP\Share::SHARE_TYPE_REMOTE, self::TEST_FILES_SHARING_API_USER1, 'test', '1', '/1', '1', '/test.txt', '1', \time(), 'token1', 'foo@bar']);
-		$dummy->execute([\OCP\Share::SHARE_TYPE_REMOTE, self::TEST_FILES_SHARING_API_USER1, 'test', '1', '/1', '1', '/test.txt', '1', \time(), 'token2', 'bar@bar']);
-
-		$verify = \OCP\DB::prepare('SELECT * FROM `*PREFIX*share`');
-		$result = $verify->execute();
-		$data = $result->fetchAll();
-		$this->assertCount(2, $data);
-
-		$_POST['token'] = 'token1';
-		$this->s2s->declineShare($data[0]['id']);
-
-		$verify = \OCP\DB::prepare('SELECT * FROM `*PREFIX*share`');
-		$result = $verify->execute();
-		$data = $result->fetchAll();
-		$this->assertCount(1, $data);
-		$this->assertEquals('bar@bar', $data[0]['share_with']);
-
-		$_POST['token'] = 'token2';
-		$this->s2s->declineShare($data[0]['id']);
-
-		$verify = \OCP\DB::prepare('SELECT * FROM `*PREFIX*share`');
-		$result = $verify->execute();
-		$data = $result->fetchAll();
-		$this->assertEmpty($data);
 	}
 
 	/**
@@ -433,16 +462,19 @@ class RequestHandlerTest extends TestCase {
 			->willReturn(FederatedShareProvider::SHARE_TYPE_REMOTE);
 		return $share;
 	}
+
 	protected function expectIncomingSharing($state) {
 		$this->federatedShareProvider->expects($this->once())
 			->method('isIncomingServer2serverShareEnabled')
 			->willReturn($state === 'enabled');
 	}
+
 	protected function expectOutgoingSharing($state) {
 		$this->federatedShareProvider->expects($this->once())
 			->method('isOutgoingServer2serverShareEnabled')
 			->willReturn($state === 'enabled');
 	}
+
 	protected function expectFileSharingApp($state) {
 		$this->appManager->expects($this->once())
 			->method('isEnabledForUser')

@@ -255,22 +255,28 @@ class RequestHandlerController extends OCSController {
 	 * @return Result
 	 */
 	public function acceptShare($id) {
-		if (!$this->isS2SEnabled()) {
-			return new Result(null, 503, 'Server does not support federated cloud sharing');
-		}
-
-		$token = isset($_POST['token']) ? $_POST['token'] : null;
-
 		try {
-			$share = $this->federatedShareProvider->getShareById($id);
-			if ($this->verifyShare($share, $token)) {
-				$this->fedShareManager->acceptShare($share);
-				if ($share->getShareOwner() !== $share->getSharedBy()) {
-					list(, $remote) = $this->addressHandler->splitUserRemote($share->getSharedBy());
-					$remoteId = $this->federatedShareProvider->getRemoteId($share);
-					$this->notifications->sendAcceptShare($remote, $remoteId, $share->getToken());
-				}
+			$this->assertOutgoingSharingEnabled();
+
+			$share = $this->getValidShare($id);
+			$this->fedShareManager->acceptShare($share);
+			if ($share->getShareOwner() !== $share->getSharedBy()) {
+				list(, $remote) = $this->addressHandler->splitUserRemote(
+					$share->getSharedBy()
+				);
+				$remoteId = $this->federatedShareProvider->getRemoteId($share);
+				$this->notifications->sendAcceptShare(
+					$remote,
+					$remoteId,
+					$share->getToken()
+				);
 			}
+		} catch (NotSupportedException $e) {
+			return new Result(
+				null,
+				Http::STATUS_SERVICE_UNAVAILABLE,
+				'Server does not support federated cloud sharing'
+			);
 		} catch (Share\Exceptions\ShareNotFound $e) {
 			// pass
 		}
@@ -288,22 +294,22 @@ class RequestHandlerController extends OCSController {
 	 * @return Result
 	 */
 	public function declineShare($id) {
-		if (!$this->isS2SEnabled()) {
-			return new Result(null, 503, 'Server does not support federated cloud sharing');
-		}
-
-		$token = isset($_POST['token']) ? $_POST['token'] : null;
-
 		try {
-			$share = $this->federatedShareProvider->getShareById($id);
-			if ($this->verifyShare($share, $token)) {
-				if ($share->getShareOwner() !== $share->getSharedBy()) {
-					list(, $remote) = $this->addressHandler->splitUserRemote($share->getSharedBy());
-					$remoteId = $this->federatedShareProvider->getRemoteId($share);
-					$this->notifications->sendDeclineShare($remote, $remoteId, $share->getToken());
-				}
-				$this->fedShareManager->declineShare($share);
+			$this->assertOutgoingSharingEnabled();
+
+			$share = $this->getValidShare($id);
+			if ($share->getShareOwner() !== $share->getSharedBy()) {
+				list(, $remote) = $this->addressHandler->splitUserRemote($share->getSharedBy());
+				$remoteId = $this->federatedShareProvider->getRemoteId($share);
+				$this->notifications->sendDeclineShare($remote, $remoteId, $share->getToken());
 			}
+			$this->fedShareManager->declineShare($share);
+		} catch (NotSupportedException $e) {
+			return new Result(
+				null,
+				Http::STATUS_SERVICE_UNAVAILABLE,
+				'Server does not support federated cloud sharing'
+			);
 		} catch (Share\Exceptions\ShareNotFound $e) {
 			// pass
 		}
@@ -456,6 +462,27 @@ class RequestHandlerController extends OCSController {
 			->where($query->expr()->eq('id', $query->createNamedParameter($share->getId())))
 			->set('permissions', $query->createNamedParameter($permissions))
 			->execute();
+	}
+
+	/**
+	 * Get share by id, validate it's type and token
+	 *
+	 * @param int $id
+	 *
+	 * @return IShare
+	 *
+	 * @throws Share\Exceptions\ShareNotFound
+	 * @throws InvalidShareException
+	 */
+	protected function getValidShare($id) {
+		$share = $this->federatedShareProvider->getShareById($id);
+		$token = $this->request->getParam('token', null);
+		if ($share->getShareType() !== FederatedShareProvider::SHARE_TYPE_REMOTE
+			|| $share->getToken() !== $token
+		) {
+			throw new InvalidShareException();
+		}
+		return $share;
 	}
 
 	/**
