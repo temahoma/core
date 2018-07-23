@@ -97,8 +97,15 @@ class CorsPlugin extends ServerPlugin {
 		$this->server = $server;
 
 		$request = $this->server->httpRequest;
-		if (!$request->hasHeader('Origin') || Util::isSameDomain($request->getHeader('Origin'), $request->getAbsoluteUrl())) {
-			return false;
+		if (!$request->hasHeader('Origin')) {
+			return;
+		}
+		$originHeader = $request->getHeader('Origin');
+		if ($this->ignoreOriginHeader($originHeader)) {
+			return;
+		}
+		if (Util::isSameDomain($originHeader, $request->getAbsoluteUrl())) {
+			return;
 		}
 
 		$this->server->on('beforeMethod', [$this, 'setCorsHeaders']);
@@ -146,5 +153,17 @@ class CorsPlugin extends ServerPlugin {
 			$this->server->sapi->sendResponse($response);
 			return false;
 		}
+	}
+
+	/**
+	 * @param string $originHeader
+	 * @return bool
+	 */
+	public function ignoreOriginHeader($originHeader) {
+		if (empty($originHeader)) {
+			return true;
+		}
+		$schema = \parse_url($originHeader, PHP_URL_SCHEME);
+		return \in_array(\strtolower($schema), ['moz-extension', 'chrome-extension']);
 	}
 }
