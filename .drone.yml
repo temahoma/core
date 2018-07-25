@@ -19,6 +19,23 @@ pipeline:
       matrix:
         USE_FEDERATED_SERVER: true
 
+  configure-federation-server:
+    image: owncloudci/php:${PHP_VERSION}
+    pull: true
+    commands:
+      - cd /drone/fed-server
+      - php occ a:l
+      - php occ a:e testing
+      - php occ a:l
+      - php occ config:system:set trusted_domains 1 --value=server
+      - php occ config:system:set trusted_domains 2 --value=federated
+      - php occ log:manage --level 2
+      - php occ config:list
+      - chown www-data /drone/fed-server -R
+    when:
+      matrix:
+        INSTALL_SERVER: true
+
   restore:
     image: plugins/s3-cache:1
     pull: true
