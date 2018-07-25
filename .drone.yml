@@ -29,12 +29,43 @@ pipeline:
       - php occ a:l
       - php occ config:system:set trusted_domains 1 --value=server
       - php occ config:system:set trusted_domains 2 --value=federated
+      - php occ config:system:set sharing.federation.allowHttpFallback --type boolean --value true
       - php occ log:manage --level 2
       - php occ config:list
+    when:
+      matrix:
+        USE_FEDERATED_SERVER: true
+
+  configure-skeleton-federation-server:
+    image: owncloudci/php:${PHP_VERSION}
+    pull: true
+    commands:
+      - cd /drone/fed-server
+      - php occ config:system:set skeletondirectory --value=/drone/src/tests/acceptance/skeleton
+    when:
+      matrix:
+        USE_FEDERATED_SERVER: true
+        TEST_SUITE: api
+
+  configure-skeleton-federation-server:
+    image: owncloudci/php:${PHP_VERSION}
+    pull: true
+    commands:
+      - cd /drone/fed-server
+      - php occ config:system:set skeletondirectory --value=/drone/src/tests/acceptance/webUISkeleton
+    when:
+      matrix:
+        USE_FEDERATED_SERVER: true
+        TEST_SUITE: selenium
+
+  fix-permissions-federation-server:
+    image: owncloudci/php:${PHP_VERSION}
+    pull: true
+    commands:
       - chown www-data /drone/fed-server -R
     when:
       matrix:
-        INSTALL_SERVER: true
+        USE_FEDERATED_SERVER: true
 
   restore:
     image: plugins/s3-cache:1
@@ -244,6 +275,17 @@ pipeline:
     pull: true
     commands:
       - tail -f /drone/src/data/owncloud.log
+    when:
+      matrix:
+        OWNCLOUD_LOG: true
+
+  federated-log:
+    image: owncloud/ubuntu:16.04
+    detach: true
+    pull: true
+    commands:
+      - touch /drone/federated/data/owncloud.log
+      - tail -f /drone/federated/data/owncloud.log
     when:
       matrix:
         OWNCLOUD_LOG: true

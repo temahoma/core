@@ -930,6 +930,7 @@ trait WebDav {
 
 		try {
 			$response = $client->propfind(
+				$this->getBaseUrl() . "/" .
 				$this->makeSabrePath($user, $path), $properties, $folderDepth
 			);
 		} catch (Sabre\HTTP\ClientHttpException $e) {
