@@ -30,7 +30,7 @@ pipeline:
       - php occ config:system:set trusted_domains 1 --value=server
       - php occ config:system:set trusted_domains 2 --value=federated
       - php occ config:system:set sharing.federation.allowHttpFallback --type boolean --value true
-      - php occ log:manage --level 2
+      - php occ log:manage --level 0
       - php occ config:list
     when:
       matrix:
@@ -156,7 +156,7 @@ pipeline:
       - php occ a:l
       - php occ config:system:set trusted_domains 1 --value=server
       - php occ config:system:set trusted_domains 2 --value=federated
-      - php occ log:manage --level 2
+      - php occ log:manage --level 0
       - php occ config:list
     when:
       matrix:
@@ -284,8 +284,7 @@ pipeline:
     detach: true
     pull: true
     commands:
-      - touch /drone/federated/data/owncloud.log
-      - tail -f /drone/federated/data/owncloud.log
+      - tail -f /drone/fed-server/data/owncloud.log
     when:
       matrix:
         OWNCLOUD_LOG: true
