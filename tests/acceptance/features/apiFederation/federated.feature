@@ -1,7 +1,7 @@
 @api
 Feature: federated
 	Background:
-		Given using API version "1"
+		Given using OCS API version "1"
 		And using server "LOCAL"
 		And parameter "shareapi_enabled" of app "core" has been set to "yes"
 		And parameter "shareapi_allow_resharing" of app "core" has been set to "yes"
