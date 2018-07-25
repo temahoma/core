@@ -10,6 +10,15 @@ clone:
     depth: 50
 
 pipeline:
+  install-fed-server:
+    image: owncloudci/core
+    pull: true
+    version: ${FEDERATION_OC_VERSION}
+    core_path: /drone/fed-server
+    when:
+      matrix:
+        USE_FEDERATED_SERVER: true
+
   restore:
     image: plugins/s3-cache:1
     pull: true
@@ -99,7 +108,7 @@ pipeline:
       - php occ a:l
       - php occ config:system:set trusted_domains 1 --value=server
       - php occ config:system:set trusted_domains 2 --value=federated
-      - php occ log:manage --level 0
+      - php occ log:manage --level 2
       - php occ config:list
     when:
       matrix:
@@ -355,7 +364,7 @@ services:
     image: owncloudci/php:${PHP_VERSION}
     pull: true
     environment:
-      - APACHE_WEBROOT=/drone/src/
+      - APACHE_WEBROOT=/drone/fed-server/
     command: [ "/usr/local/bin/apachectl", "-e", "debug" , "-D", "FOREGROUND" ]
     when:
       matrix:
@@ -582,6 +591,7 @@ matrix:
       DB_TYPE: mariadb
       USE_SERVER: true
       USE_FEDERATED_SERVER: true
+      FEDERATION_OC_VERSION: daily-stable10-qa
       INSTALL_SERVER: true
       CHOWN_SERVER: true
       OWNCLOUD_LOG: true
