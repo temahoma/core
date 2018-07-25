@@ -826,6 +826,7 @@ matrix:
       DB_TYPE: mariadb
       USE_SERVER: true
       USE_FEDERATED_SERVER: true
+      FEDERATION_OC_VERSION: daily-stable10-qa
       INSTALL_SERVER: true
       CHOWN_SERVER: true
       OWNCLOUD_LOG: true
