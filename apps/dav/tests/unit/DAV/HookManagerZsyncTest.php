@@ -18,10 +18,8 @@
  */
 namespace OCA\DAV\Tests\unit\DAV;
 
+use OCP\IUserSession;
 use Test\TestCase;
-use OCP\Files\NotFoundException;
-use OC\L10N\L10N;
-use OCA\DAV\CalDAV\BirthdayService;
 use OCA\DAV\CalDAV\CalDavBackend;
 use OCA\DAV\CardDAV\CardDavBackend;
 use OCA\DAV\CardDAV\SyncService;
@@ -111,7 +109,10 @@ class HookManagerZsyncTest extends TestCase {
 			->disableOriginalConstructor()
 			->getMock();
 
-		$hm = new HookManager($userManager, $syncService, $cal, $card, $l10n);
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn(self::TEST_ZSYNC_HOOKS_USER);
+
+		$hm = new HookManager($userManager, $syncService, $cal, $card, $l10n, \OC::$server->getUserSession());
 		$hm->setup();
 
 		self::loginHelper(self::TEST_ZSYNC_HOOKS_USER);

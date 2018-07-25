@@ -31,6 +31,7 @@ use OCA\DAV\CardDAV\SyncService;
 use OCA\DAV\HookManager;
 use OCP\IUser;
 use OCP\IUserManager;
+use OCP\IUserSession;
 use Test\TestCase;
 
 class HookManagerTest extends TestCase {
@@ -38,10 +39,13 @@ class HookManagerTest extends TestCase {
 	/** @var L10N */
 	private $l10n;
 
+	/** @var IUserSession */
+	private $userSession;
+
 	public function setUp() {
 		parent::setUp();
 
-		$this->l10n = $this->getMockBuilder('OC\L10N\L10N')
+		$this->l10n = $this->getMockBuilder(L10N::class)
 			->disableOriginalConstructor()->getMock();
 		$this->l10n
 			->expects($this->any())
@@ -49,6 +53,8 @@ class HookManagerTest extends TestCase {
 			->will($this->returnCallback(function ($text, $parameters = []) {
 				return \vsprintf($text, $parameters);
 			}));
+
+		$this->userSession = $this->createMock(IUserSession::class);
 	}
 
 	public function test() {
@@ -89,7 +95,7 @@ class HookManagerTest extends TestCase {
 			'principals/users/newUser',
 			'contacts', ['{DAV:}displayname' => $this->l10n->t('Contacts')]);
 
-		$hm = new HookManager($userManager, $syncService, $cal, $card, $this->l10n);
+		$hm = new HookManager($userManager, $syncService, $cal, $card, $this->l10n, $this->userSession);
 		$hm->firstLogin($user);
 	}
 
@@ -127,7 +133,7 @@ class HookManagerTest extends TestCase {
 		]);
 		$card->expects($this->never())->method('createAddressBook');
 
-		$hm = new HookManager($userManager, $syncService, $cal, $card, $this->l10n);
+		$hm = new HookManager($userManager, $syncService, $cal, $card, $this->l10n, $this->userSession);
 		$hm->firstLogin($user);
 	}
 
@@ -171,7 +177,7 @@ class HookManagerTest extends TestCase {
 			'principals/users/newUser',
 			'contacts', ['{DAV:}displayname' => $this->l10n->t('Contacts')]);
 
-		$hm = new HookManager($userManager, $syncService, $cal, $card, $this->l10n);
+		$hm = new HookManager($userManager, $syncService, $cal, $card, $this->l10n, $this->userSession);
 		$hm->firstLogin($user);
 	}
 
@@ -212,7 +218,7 @@ class HookManagerTest extends TestCase {
 		]);
 		$card->expects($this->once())->method('deleteAddressBook')->with('personal');
 
-		$hm = new HookManager($userManager, $syncService, $cal, $card, $this->l10n);
+		$hm = new HookManager($userManager, $syncService, $cal, $card, $this->l10n, $this->userSession);
 		$hm->preDeleteUser(['uid' => 'newUser']);
 		$hm->postDeleteUser(['uid' => 'newUser']);
 	}

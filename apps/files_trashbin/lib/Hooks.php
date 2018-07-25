@@ -45,9 +45,9 @@ class Hooks {
 	}
 
 	public static function post_write_hook($params) {
-		$user = \OCP\User::getUser();
-		if (!empty($user)) {
-			Trashbin::resizeTrash($user);
+		$userId = \OC::$server->getUserSession()->getUser()->getUID();
+		if (!empty($userId)) {
+			Trashbin::resizeTrash($userId);
 		}
 	}
 }
